@@ -1,0 +1,97 @@
+﻿@using MudBlazor
+@using BlazorAppTest.Domain
+@using BlazorAppTest.Repositories
+@using BlazorAppTest.Unit
+@using MudBlazor.Components
+@inject IUnitRepository UnitRepository
+@inject ISnackbar Snackbar
+
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.DriveFileMove" Class="mr-3 mb-n1" />
+            Переместить объект: @CurrentUnit.Name
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Выберите новый родительский узел. Система автоматически проверит отсутствие циклических зависимостей.
+        </MudAlert>
+        
+        <MudSelect T="Guid?" Label="Новый родительский объект" @bind-Value="_newParentId" AnchorOrigin="Origin.BottomCenter" Variant="Variant.Outlined">
+            <MudSelectItem T="Guid?" Value="@(null)">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.VerticalAlignTop" Size="Size.Small" Class="mr-2" />
+                    <MudText Color="Color.Primary">-- Корень системы (без родителя) --</MudText>
+                </div>
+            </MudSelectItem>
+            
+            @foreach (var unit in _potentialParents)
+            {
+                <MudSelectItem T="Guid?" Value="@unit.Id">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@GetIcon(unit.Kind)" Size="Size.Small" Class="mr-2" />
+                        <MudText>@unit.Name</MudText>
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Отмена</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="PerformMove">Подтвердить перемещение</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public UnitBase CurrentUnit { get; set; } = null!;
+
+    private Guid? _newParentId;
+    private List<UnitBase> _potentialParents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _newParentId = CurrentUnit.ParentId;
+        
+        // Загружаем все юниты, кроме самого себя (нельзя быть родителем самому себе)
+        var all = await UnitRepository.GetAllAsync();
+        _potentialParents = all.Where(u => u.Id != CurrentUnit.Id).OrderBy(u => u.Name).ToList();
+    }
+
+    private async Task PerformMove()
+    {
+        try
+        {
+            // Вызываем MoveAsync, который инициирует SaveChangesAsync
+            await UnitRepository.MoveAsync(CurrentUnit.Id, _newParentId);
+            
+            Snackbar.Add("Объект успешно перемещен", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (OperationCanceledException ex)
+        {
+            // Здесь ловится ошибка от DatabaseTriggerService (например, если выбран дочерний элемент)
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Ошибка при выполнении операции", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private string GetIcon(UnitKind kind) => kind switch
+    {
+        UnitKind.Department => Icons.Material.Filled.Business,
+        UnitKind.Storage => Icons.Material.Filled.Warehouse,
+        UnitKind.Production => Icons.Material.Filled.PrecisionManufacturing,
+        UnitKind.Transport => Icons.Material.Filled.LocalShipping,
+        UnitKind.Position => Icons.Material.Filled.Place,
+        _ => Icons.Material.Filled.Label
+    };
+}
+

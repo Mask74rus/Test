@@ -1,0 +1,240 @@
+﻿@page "/units"
+@using MudBlazor
+@using BlazorAppTest.Domain
+
+@using BlazorAppTest.Repositories
+@using BlazorAppTest.Unit
+@inject IUnitRepository UnitRepository
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-6">
+    <MudGrid>
+        <!-- Левая панель: Инструменты и Дерево -->
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="3" Class="pa-4" Style="height:80vh; overflow-y:auto">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+                    <MudText Typo="Typo.h6">Структура</MudText>
+                    <MudSpacer />
+                    @* Кнопка создания корневого элемента *@
+                    <MudMenu StartIcon="@Icons.Material.Filled.Add" Label="Корень" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small">
+                        @foreach (UnitKind kind in Enum.GetValues(typeof(UnitKind)))
+                        {
+                            <MudMenuItem OnClick="@(() => CreateUnit(kind, null))">@kind.ToString()</MudMenuItem>
+                        }
+                    </MudMenu>
+                </MudStack>
+
+                <MudTreeView T="UnitBase"
+                             Items="_treeData"
+                             Hover="true"
+                             SelectedValueChanged="OnNodeSelected">
+                    <ItemTemplate>
+                        <MudTreeViewItem Value="@context.Value"
+                                         Items="@context.Children"
+                                         Icon="@context.Icon"
+                                         Text="@context.Text"
+                                         @bind-Expanded="@context.Expanded" />
+                    </ItemTemplate>
+                </MudTreeView>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Правая панель: Редактор -->
+        <MudItem xs="12" md="8">
+            @if (_selectedUnit != null)
+            {
+                <MudCard Elevation="3">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h5">@(_isNewRecord ? "Новый объект" : _selectedUnit.Name)</MudText>
+                            @if (!_isNewRecord)
+                            {
+                                <MudText Typo="Typo.caption">ID: @_selectedUnit.Id</MudText>
+                            }
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            @if (!_isNewRecord)
+                            {
+                                <MudMenu Icon="@Icons.Material.Filled.AddCard" Color="Color.Info" Label="Добавить потомка" Class="mr-2">
+                                    @foreach (UnitKind kind in Enum.GetValues(typeof(UnitKind)))
+                                    {
+                                        <MudMenuItem OnClick="@(() => CreateUnit(kind, _selectedUnit.Id))">@kind.ToString()</MudMenuItem>
+                                    }
+                                </MudMenu>
+                                <MudIconButton Icon="@Icons.Material.Filled.DriveFileMove" Color="Color.Tertiary" OnClick="OpenMoveDialog" Title="Переместить" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="DeleteUnit" Title="Удалить" />
+                            }
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    
+                    <MudCardContent>
+                        <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+                            <MudGrid>
+                                <MudItem xs="12" sm="8">
+                                    <MudTextField T="string" Label="Наименование" @bind-Value="_selectedUnit.Name" Required="true" />
+                                </MudItem>
+                                <MudItem xs="12" sm="4">
+                                    <MudTextField T="string" Label="Код" @bind-Value="_selectedUnit.Code" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudSelect T="UnitType" Label="Тип" @bind-Value="_selectedUnit.Type">
+                                        @foreach (UnitType type in Enum.GetValues(typeof(UnitType)))
+                                        {
+                                            <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                                
+                                @if (_selectedUnit is PositionUnit pos)
+                                {
+                                    <MudItem xs="6">
+                                        <MudNumericField Label="Порядок" @bind-Value="pos.OrderNo" />
+                                    </MudItem>
+                                    <MudItem xs="6">
+                                        <MudCheckBox T="bool" @bind-Value="pos.IsMultiple" Label="Множественный" Color="Color.Primary" />
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        </MudForm>
+                    </MudCardContent>
+                    
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Class="ml-auto" Disabled="@(!_formIsValid)">
+                            Сохранить
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Выберите узел в дереве для редактирования или создайте новый корневой элемент.</MudAlert>
+            }
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private List<UnitBase> _allUnits = new();
+    private List<TreeItemData<UnitBase>> _treeData = new();
+    private UnitBase? _selectedUnit;
+    private MudForm _form = null!;
+    private bool _formIsValid;
+    private bool _isNewRecord;
+    
+    // Храним состояние раскрытых узлов, чтобы дерево не "схлопывалось" после сохранения
+    private Dictionary<Guid, bool> _expandedStates = new();
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        _allUnits = await UnitRepository.GetAllWithChildrenAsync();
+        BuildTree();
+    }
+
+    private void BuildTree()
+    {
+        _treeData.Clear();
+        var map = _allUnits.Select(u => new TreeItemData<UnitBase>
+        {
+            Value = u,
+            Text = u.Name,
+            Icon = GetIcon(u.Kind),
+            Expanded = _expandedStates.GetValueOrDefault(u.Id, false),
+            Children = new List<TreeItemData<UnitBase>>()
+        }).ToDictionary(x => x.Value!.Id);
+
+        foreach (var item in map.Values)
+        {
+            var unit = item.Value!;
+            if (unit.ParentId.HasValue && map.TryGetValue(unit.ParentId.Value, out var parent))
+            {
+                ((List<TreeItemData<UnitBase>>)parent.Children!).Add(item);
+            }
+            else
+            {
+                _treeData.Add(item);
+            }
+        }
+    }
+
+    private void OnNodeSelected(UnitBase unit)
+    {
+        _selectedUnit = unit;
+        _isNewRecord = false;
+    }
+
+    private void CreateUnit(UnitKind kind, Guid? parentId)
+    {
+        _selectedUnit = kind switch
+        {
+            UnitKind.Department => new DepartmentUnit { Type = UnitType.Other, ParentId = parentId },
+            UnitKind.Storage => new StorageUnit { Type = UnitType.Warehouse, ParentId = parentId },
+            UnitKind.Production => new ProductionUnit { Type = UnitType.Workshop, ParentId = parentId },
+            UnitKind.Transport => new TransportUnit { Type = UnitType.Vehicle, ParentId = parentId },
+            UnitKind.Position => new PositionUnit { Type = UnitType.Workstation, ParentId = parentId },
+            _ => throw new ArgumentOutOfRangeException()
+        };
+        
+        if (parentId.HasValue) _expandedStates[parentId.Value] = true;
+        _isNewRecord = true;
+    }
+
+    private async Task Submit()
+    {
+        try
+        {
+            if (_isNewRecord) await UnitRepository.AddAsync(_selectedUnit!);
+            else await UnitRepository.UpdateAsync(_selectedUnit!);
+            
+            Snackbar.Add("Данные сохранены", Severity.Success);
+            _isNewRecord = false;
+            await LoadData();
+        }
+        catch (OperationCanceledException ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        catch (Exception) { Snackbar.Add("Ошибка сохранения", Severity.Error); }
+    }
+
+    private async Task OpenMoveDialog()
+    {
+        var parameters = new DialogParameters { ["CurrentUnit"] = _selectedUnit };
+        var dialog = await DialogService.ShowAsync<MoveUnitDialog>("Перемещение объекта", parameters);
+        var result = await dialog.Result;
+        if (!result.Canceled) await LoadData();
+    }
+
+    private async Task DeleteUnit()
+    {
+        if (_selectedUnit == null) return;
+
+        try 
+        {
+            await UnitRepository.DeleteAsync(_selectedUnit.Id);
+        
+            // Если удаление прошло успешно:
+            _selectedUnit = null;
+            await LoadData();
+            Snackbar.Add("Объект успешно удален", Severity.Info);
+        }
+        catch (OperationCanceledException ex)
+        {
+            // Ловим наше сообщение из триггера и показываем пользователю
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Произошла непредвиденная ошибка при удалении", Severity.Error);
+        }
+    }
+
+    private string GetIcon(UnitKind kind) => kind switch
+    {
+        UnitKind.Storage => Icons.Material.Filled.Warehouse,
+        UnitKind.Department => Icons.Material.Filled.Business,
+        UnitKind.Production => Icons.Material.Filled.PrecisionManufacturing,
+        UnitKind.Transport => Icons.Material.Filled.LocalShipping,
+        UnitKind.Position => Icons.Material.Filled.Place,
+        _ => Icons.Material.Filled.Label
+    };
+}
