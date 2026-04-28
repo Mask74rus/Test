@@ -2,7 +2,6 @@
 using BlazorAppTest.Interfaces;
 using FluentValidation;
 using FluentValidation.Results;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace BlazorAppTest.Domain;
 

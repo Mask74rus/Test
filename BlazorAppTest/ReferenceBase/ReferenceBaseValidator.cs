@@ -1,5 +1,4 @@
-﻿using BlazorAppTest.DomainObject.Model;
-using FluentValidation;
+﻿using FluentValidation;
 using FluentValidation.Results;
 
 namespace BlazorAppTest.Domain;

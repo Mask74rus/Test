@@ -1,4 +1,4 @@
-﻿namespace BlazorAppTest.DomainObject.Model;
+﻿namespace BlazorAppTest.Domain;
 
 /// <summary>
 /// Основной класс (GUID по умолчанию)

@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
 
-namespace BlazorAppTest.DomainObject.Model;
+namespace BlazorAppTest.Domain;
 
 public abstract class DomainObjectValidator<T> : AbstractValidator<T> where T : DomainObject
 {

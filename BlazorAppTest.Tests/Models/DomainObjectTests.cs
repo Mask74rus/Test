@@ -5,7 +5,7 @@ namespace BlazorAppTest.Tests.Models;
 public class DomainObjectTests
 {
     // Тестовый класс-наследник, так как DomainObject абстрактный
-    private class TestEntity : DomainObject.Model.DomainObject { }
+    private class TestEntity : Domain.DomainObject { }
 
     [Fact]
     public void Id_Should_Be_Generated_Upon_Initialization()

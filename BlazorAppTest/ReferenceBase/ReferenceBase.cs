@@ -5,7 +5,7 @@ namespace BlazorAppTest.Domain;
 /// <summary>
 /// Базовый класс для всех справочников
 /// </summary>
-public abstract class ReferenceBase : DomainObject.Model.DomainObject, ISoftDeletable
+public abstract class ReferenceBase : DomainObject, ISoftDeletable
 {
     public string Name { get; set; } = string.Empty;
 

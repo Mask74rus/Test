@@ -1,6 +1,7 @@
 ﻿
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
+using BlazorAppTest.Interfaces;
 
 namespace BlazorAppTest.Domain;
 
@@ -11,6 +12,33 @@ public class DatabaseTriggerService(IServiceScopeFactory scopeFactory)
     private readonly ConcurrentDictionary<Type, List<Type>> _hierarchyCache = new();
 
     public IServiceScopeFactory ScopeFactory => scopeFactory;
+
+    public void Register<TEntity, TTrigger>()
+        where TEntity : class
+        where TTrigger : class
+    {
+        // Проверяем, реализует ли класс интерфейс "ДО сохранения"
+        if (typeof(IBeforeSaveTrigger<TEntity>).IsAssignableFrom(typeof(TTrigger)))
+        {
+            BeforeSave<TEntity>(async args =>
+            {
+                using IServiceScope scope = scopeFactory.CreateScope();
+                var handler = (IBeforeSaveTrigger<TEntity>)ActivatorUtilities.CreateInstance<TTrigger>(scope.ServiceProvider);
+                await handler.HandleAsync(args);
+            });
+        }
+
+        // Проверяем, реализует ли класс интерфейс "ПОСЛЕ сохранения"
+        if (typeof(IAfterSaveTrigger<TEntity>).IsAssignableFrom(typeof(TTrigger)))
+        {
+            AfterSave<TEntity>(async args =>
+            {
+                using IServiceScope scope = scopeFactory.CreateScope();
+                var handler = (IAfterSaveTrigger<TEntity>)ActivatorUtilities.CreateInstance<TTrigger>(scope.ServiceProvider);
+                await handler.HandleAsync(args);
+            });
+        }
+    }
 
     public void BeforeSave<T>(Func<EntityCancelEventArgs<T>, Task> action) where T : class
     {

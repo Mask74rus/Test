@@ -1,6 +1,6 @@
 ﻿using BlazorAppTest.DomainObject.Interface;
 
-namespace BlazorAppTest.DomainObject.Model;
+namespace BlazorAppTest.Domain;
 
 /// <summary>
 /// Универсальный базовый класс с поддержкой любого типа ключа

@@ -15,7 +15,6 @@ namespace BlazorAppTest.Tests.Repositories;
 public class UnitRepositoryTests : IDisposable
 {
     private readonly SqliteConnection _connection;
-    private readonly DbContextOptions<ApplicationDbContext> _options;
     private readonly IServiceProvider _serviceProvider;
     private readonly UnitRepository _repository;
 

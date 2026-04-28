@@ -1,7 +1,6 @@
 using BlazorAppTest.Components;
 using BlazorAppTest.Domain;
 using BlazorAppTest.Repositories;
-using BlazorAppTest.Unit;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -18,7 +17,7 @@ namespace BlazorAppTest
                 .AddInteractiveServerComponents();
             
             // Регистрация валидаторов
-            builder.Services.AddValidatorsFromAssemblyContaining<UnitBaseValidator<UnitBase>>();
+            builder.Services.AddValidatorsFromAssemblyContaining<DomainObjectValidator<Domain.DomainObject>>();
 
             // Регистрируем сервис для работы с триггерами
             builder.Services.AddSingleton<DatabaseTriggerService>();
