@@ -12,9 +12,10 @@ public static class DbTriggersConfiguration
     {
         var triggerService = services.GetRequiredService<DatabaseTriggerService>();
 
-        // Добавляем async
+        // 1. Общая валидация через FluentValidation
         triggerService.BeforeSave<IDomainObjectHasKey<Guid>>(async args =>
         {
+            // Нам все еще нужен scope для получения валидаторов из DI
             using IServiceScope scope = triggerService.ScopeFactory.CreateScope();
 
             Type entityType = args.Entity.GetType();
@@ -23,7 +24,6 @@ public static class DbTriggersConfiguration
             if (scope.ServiceProvider.GetService(validatorType) is IValidator validator)
             {
                 var context = new ValidationContext<object>(args.Entity);
-                // Используем асинхронную валидацию
                 ValidationResult result = await validator.ValidateAsync(context);
 
                 if (!result.IsValid)
@@ -32,39 +32,32 @@ public static class DbTriggersConfiguration
                     args.ErrorMessage = string.Join(" ", result.Errors.Select(e => e.ErrorMessage));
                 }
             }
-            // Если ValidateAsync не использовался, нужно было бы дописать await Task.CompletedTask;
         });
 
-        // 2. Специфичная проверка иерархии (только для UnitBase)
+        // 2. Специфичная проверка иерархии (UnitBase) через ПРЯМОЙ контекст
         triggerService.BeforeSave<UnitBase>(async args =>
         {
-            // Проверяем, если это создание или если ParentId был изменен
-            bool isParentChanged = args.State == EntityStateChangeEnum.Added ||
-                                   args.Changes.Any(c => c.PropertyName == nameof(UnitBase.ParentId));
-
+            // Проверка удаления: есть ли дети?
             if (args.State == EntityStateChangeEnum.Deleted)
             {
-                using var scope = triggerService.ScopeFactory.CreateScope();
-                var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-                await using var context = await factory.CreateDbContextAsync();
-
-                // Проверяем, есть ли у этого объекта дети
-                bool hasChildren = await context.Units
+                // Используем args.Context напрямую из интерцептора
+                bool hasChildren = await args.Context.Set<UnitBase>()
                     .AnyAsync(u => u.ParentId == args.Entity.Id);
 
                 if (hasChildren)
                 {
                     args.Cancel = true;
-                    args.ErrorMessage = "Нельзя удалить объект, у которого есть дочерние элементы. Сначала удалите или переместите их.";
+                    args.ErrorMessage = "Нельзя удалить объект, у которого есть дочерние элементы.";
+                    return;
                 }
             }
 
+            // Проверка циклической зависимости
+            bool isParentChanged = args.State == EntityStateChangeEnum.Added ||
+                                   args.Changes.Any(c => c.PropertyName == nameof(UnitBase.ParentId));
+
             if (isParentChanged && args.Entity.ParentId.HasValue)
             {
-                using IServiceScope scope = triggerService.ScopeFactory.CreateScope();
-                var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-                await using ApplicationDbContext context = await factory.CreateDbContextAsync();
-
                 Guid? currentId = args.Entity.ParentId;
                 Guid targetId = args.Entity.Id;
                 int maxDepth = 50;
@@ -79,8 +72,8 @@ public static class DbTriggersConfiguration
                         return;
                     }
 
-                    // Поднимаемся выше по дереву через базу
-                    currentId = await context.Units
+                    // Поднимаемся по дереву, используя тот же контекст транзакции
+                    currentId = await args.Context.Set<UnitBase>()
                         .AsNoTracking()
                         .Where(u => u.Id == currentId)
                         .Select(u => u.ParentId)

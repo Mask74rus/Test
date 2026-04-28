@@ -16,16 +16,21 @@ namespace BlazorAppTest
 
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents();
-
-            // Подключаем PostgreSQL
-            builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
+            
             // Регистрация валидаторов
             builder.Services.AddValidatorsFromAssemblyContaining<UnitBaseValidator<UnitBase>>();
 
             // Регистрируем сервис для работы с триггерами
             builder.Services.AddSingleton<DatabaseTriggerService>();
+            builder.Services.AddSingleton<DatabaseTriggerInterceptor>();
+
+            // Подключаем PostgreSQL
+            builder.Services.AddDbContextFactory<ApplicationDbContext>((sp, options) =>
+            {
+                var interceptor = sp.GetRequiredService<DatabaseTriggerInterceptor>();
+                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+                    .AddInterceptors(interceptor); // Включаем логику триггеров
+            });
 
             // Регистрация репозиториев 
             builder.Services.AddScoped(typeof(IBaseRepository<,>), typeof(BaseRepository<,>));
