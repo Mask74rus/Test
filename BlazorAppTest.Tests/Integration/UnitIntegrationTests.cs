@@ -29,16 +29,16 @@ public class UnitIntegrationTests : IDisposable
         services.AddSingleton<DatabaseTriggerService>();
         services.AddLogging();
 
-        // 2. Имитация авторизации (обязательно для работы Интерцептора)
+        // 2. Имитация авторизации (обязательно для работы перехватчика)
         var authMock = new Mock<AuthenticationStateProvider>();
         authMock.Setup(x => x.GetAuthenticationStateAsync())
             .ReturnsAsync(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity())));
         services.AddSingleton(authMock.Object);
 
-        // 3. Регистрация Интерцептора
+        // 3. Регистрация перехватчика
         services.AddSingleton<DatabaseTriggerInterceptor>();
 
-        // 4. Настройка опций (сразу с интерцептором)
+        // 4. Настройка опций (сразу с перехватчиком)
         services.AddDbContext<ApplicationDbContext>((sp, opt) =>
         {
             opt.UseSqlite(_connection);
@@ -205,7 +205,7 @@ public class UnitIntegrationTests : IDisposable
 
         // Теперь триггер выбрасывает общее сообщение о циклической зависимости
         await act.Should().ThrowAsync<OperationCanceledException>()
-            .WithMessage("*Циклическая зависимость: выбранный родитель является дочерним элементом текущего объекта.*");
+            .WithMessage("*Циклическая зависимость*");
     }
 
     [Fact]

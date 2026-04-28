@@ -27,9 +27,8 @@ namespace BlazorAppTest
             // Подключаем PostgreSQL
             builder.Services.AddDbContextFactory<ApplicationDbContext>((sp, options) =>
             {
-                var interceptor = sp.GetRequiredService<DatabaseTriggerInterceptor>();
                 options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-                    .AddInterceptors(interceptor); // Включаем логику триггеров
+                    .AddInterceptors(sp.GetRequiredService<DatabaseTriggerInterceptor>()); // Включаем логику триггеров
             });
 
             // Регистрация репозиториев 

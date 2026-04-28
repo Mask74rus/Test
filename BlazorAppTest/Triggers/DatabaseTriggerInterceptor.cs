@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Components.Authorization;
+﻿using BlazorAppTest.Interfaces;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace BlazorAppTest.Domain;
 
@@ -18,12 +20,26 @@ public class DatabaseTriggerInterceptor(
         if (eventData.Context == null) return result;
 
         string? userName = await GetUserNameAsync();
-        List<ChangeEntryModel> entries = CaptureChanges(eventData.Context, userName);
 
-        // Кэшируем изменения по уникальному ID экземпляра контекста
-        _capturedChanges[eventData.Context.ContextId.InstanceId] = entries;
+        // 1. Предварительная обработка Soft Delete
+        IEnumerable<EntityEntry<ISoftDeletable>> entries = eventData.Context.ChangeTracker.Entries<ISoftDeletable>()
+            .Where(e => e.State == EntityState.Deleted);
 
-        foreach (ChangeEntryModel item in entries)
+        // Изменения должны быть до CaptureChanges
+        foreach (EntityEntry<ISoftDeletable> entry in entries)
+        {
+            // Переключаем EF в режим обновления вместо удаления
+            entry.State = EntityState.Modified;
+            entry.Entity.DeletedAt = DateTime.UtcNow;
+            entry.Entity.DeletedBy = userName;
+        }
+
+        // 2. Захват изменений (теперь CaptureChanges определит SoftDelete)
+        List<ChangeEntryModel> captured = CaptureChanges(eventData.Context, userName);
+        _capturedChanges[eventData.Context.ContextId.InstanceId] = captured;
+
+        // 3. Валидация (BeforeSave)
+        foreach (ChangeEntryModel item in captured)
         {
             await triggerService.ValidateAsync(item.Entity, item.State, item.Changes, eventData.Context);
         }
@@ -57,13 +73,26 @@ public class DatabaseTriggerInterceptor(
     {
         return context.ChangeTracker.Entries()
             .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-            .Select(e => new ChangeEntryModel
-            {
-                Entity = e.Entity,
-                State = MapState(e.State),
-                ChangedBy = userName,
-                ChangedAt = DateTime.UtcNow,
-                Changes = e.State == EntityState.Modified
+            .Select(e => {
+                EntityStateChangeEnum state = MapState(e.State);
+
+                // Если объект помечен интерфейсом ISoftDeletable
+                if (e.Entity is ISoftDeletable soft)
+                {
+                    PropertyEntry deletedAtProp = e.Property(nameof(ISoftDeletable.DeletedAt));
+                    if (deletedAtProp.IsModified && soft.DeletedAt != null)
+                    {
+                        state = EntityStateChangeEnum.SoftDeleted;
+                    }
+                }
+
+                return new ChangeEntryModel
+                {
+                    Entity = e.Entity,
+                    State = state,
+                    ChangedBy = userName,
+                    ChangedAt = DateTime.UtcNow,
+                    Changes = e.State == EntityState.Modified
                     ? e.Properties.Where(p => p.IsModified).Select(p => new PropertyChangeInfo
                     {
                         PropertyName = p.Metadata.Name,
@@ -71,6 +100,7 @@ public class DatabaseTriggerInterceptor(
                         CurrentValue = p.CurrentValue
                     }).ToList()
                     : []
+                };
             }).ToList();
     }
 

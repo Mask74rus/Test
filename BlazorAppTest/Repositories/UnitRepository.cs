@@ -1,6 +1,5 @@
 ﻿using BlazorAppTest.Unit;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
 
 namespace BlazorAppTest.Repositories;
 

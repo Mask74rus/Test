@@ -4,5 +4,6 @@ public enum EntityStateChangeEnum
 {
     Added, 
     Modified, 
-    Deleted
+    Deleted,
+    SoftDeleted
 }

@@ -32,5 +32,8 @@ public partial class ApplicationDbContext(
         modelBuilder.RegisterUnitEntities();
 
         base.OnModelCreating(modelBuilder);
+
+        // Автоматически скрывать удаленные элементы для всех, кто реализует ISoftDeletable
+        modelBuilder.Entity<ReferenceBase>().HasQueryFilter(u => u.DeletedAt == null);
     }
 }

@@ -48,6 +48,13 @@ public class DbTriggersConfigurationTests : IDisposable
 
         services.AddValidatorsFromAssemblyContaining<UnitBaseValidator<UnitBase>>();
 
+
+        var allValidators = services.Where(x => x.ServiceType.IsGenericType &&
+                                                x.ServiceType.GetGenericTypeDefinition() == typeof(IValidator<>)).ToList();
+
+        foreach (var v in allValidators)
+            Console.WriteLine($"Registered validator: {v.ServiceType.Name} -> {v.ImplementationType?.Name}");
+
         _serviceProvider = services.BuildServiceProvider();
         _options = _serviceProvider.GetRequiredService<DbContextOptions<ApplicationDbContext>>();
 
@@ -61,21 +68,20 @@ public class DbTriggersConfigurationTests : IDisposable
     [Fact]
     public async Task Configuration_Should_Link_FluentValidation_To_DatabaseSave()
     {
-        // Arrange
-        await using var context = new ApplicationDbContext(_options);
+        // Используйте провайдер, чтобы создать контекст точно с теми же настройками, 
+        // что были сконфигурированы в конструкторе теста.
+        await using var context = _serviceProvider.GetRequiredService<ApplicationDbContext>();
+
         var invalidUnit = new DepartmentUnit
         {
             Id = Guid.NewGuid(),
-            Name = "", // Ошибка FluentValidation
+            Name = "", // Невалидно
             Type = UnitType.Other
         };
         context.Units.Add(invalidUnit);
 
-        // Act
-        // Теперь Interceptor перехватит этот вызов и вызовет Validator
         Func<Task> act = async () => await context.SaveChangesAsync();
 
-        // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
