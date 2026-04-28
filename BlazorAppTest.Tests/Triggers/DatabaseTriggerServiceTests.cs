@@ -101,10 +101,10 @@ public class DatabaseTriggerServiceTests
         var storage = new StorageUnit { Id = Guid.NewGuid(), Name = "Test", Type = UnitType.Warehouse };
 
         // Act
-        // Метод NotifyAsync не требует контекста, оставляем как есть
-        await service.NotifyAsync(storage, EntityStateChangeEnum.Added, []);
+        // Теперь передаем дополнительные параметры: [], "TestUser", DateTime.UtcNow
+        await service.NotifyAsync(storage, EntityStateChangeEnum.Added, [], "TestUser", DateTime.UtcNow);
 
         // Assert
-        wasNotified.Should().BeTrue();
+        wasNotified.Should().BeTrue("Подписчик AfterSave должен был получить уведомление с метаданными");
     }
 }

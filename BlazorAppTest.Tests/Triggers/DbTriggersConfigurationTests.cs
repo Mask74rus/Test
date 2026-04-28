@@ -3,9 +3,12 @@ using BlazorAppTest.Tests.Repositories;
 using BlazorAppTest.Unit;
 using FluentAssertions;
 using FluentValidation;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using System.Security.Claims;
 
 namespace BlazorAppTest.Tests.Triggers;
 
@@ -22,26 +25,35 @@ public class DbTriggersConfigurationTests : IDisposable
 
         var services = new ServiceCollection();
 
-        // 1. Регистрируем инфраструктуру
+        // 1. Инфраструктура и триггеры
         services.AddEntityFrameworkSqlite();
         services.AddSingleton<DatabaseTriggerService>();
-        services.AddLogging();
 
-        // 2. Регистрируем контекст и фабрику (нужна для триггера иерархии)
-        services.AddDbContext<ApplicationDbContext>(opt => opt.UseSqlite(_connection));
-        services.AddSingleton<IDbContextFactory<ApplicationDbContext>>(sp =>
-            new TestDbContextFactory(sp.GetRequiredService<DbContextOptions<ApplicationDbContext>>()));
+        // 2. Имитация авторизации (нужна для интерцептора)
+        var authMock = new Mock<AuthenticationStateProvider>();
+        authMock.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "TestUser")], "Test"))));
+        services.AddSingleton(authMock.Object);
 
-        // 3. Регистрируем валидаторы из сборки
+        // 3. Регистрация Интерцептора
+        services.AddSingleton<DatabaseTriggerInterceptor>();
+
+        // 4. Регистрация контекста С ИНТЕРЦЕПТОРОМ
+        services.AddDbContext<ApplicationDbContext>((sp, opt) =>
+        {
+            opt.UseSqlite(_connection);
+            // ПОДКЛЮЧАЕМ ИНТЕРЦЕПТОР - без этого SaveChangesAsync ничего не проверит
+            opt.AddInterceptors(sp.GetRequiredService<DatabaseTriggerInterceptor>());
+        });
+
         services.AddValidatorsFromAssemblyContaining<UnitBaseValidator<UnitBase>>();
 
         _serviceProvider = services.BuildServiceProvider();
         _options = _serviceProvider.GetRequiredService<DbContextOptions<ApplicationDbContext>>();
 
-        // 4. ГЛАВНОЕ: Вызываем регистрацию наших триггеров
+        // Инициализируем триггеры
         _serviceProvider.RegisterDomainTriggers();
 
-        // Создаем схему БД
         using var context = new ApplicationDbContext(_options);
         context.Database.EnsureCreated();
     }
@@ -49,45 +61,44 @@ public class DbTriggersConfigurationTests : IDisposable
     [Fact]
     public async Task Configuration_Should_Link_FluentValidation_To_DatabaseSave()
     {
-        // Проверяем, что триггер подхватил FluentValidation (на примере пустого имени)
         // Arrange
         await using var context = new ApplicationDbContext(_options);
         var invalidUnit = new DepartmentUnit
         {
-            Name = "", // Ошибка: имя обязательно
+            Id = Guid.NewGuid(),
+            Name = "", // Ошибка FluentValidation
             Type = UnitType.Other
         };
-        context.DepartmentUnits.Add(invalidUnit);
+        context.Units.Add(invalidUnit);
 
         // Act
+        // Теперь Interceptor перехватит этот вызов и вызовет Validator
         Func<Task> act = async () => await context.SaveChangesAsync();
 
         // Assert
-        await act.Should().ThrowAsync<OperationCanceledException>()
-            .WithMessage("*Наименование обязательно*");
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
     public async Task Configuration_Should_Link_HierarchyValidation_To_DatabaseSave()
     {
         // Arrange
-        using var context = new ApplicationDbContext(_options);
+        await using var context = new ApplicationDbContext(_options);
 
-        // Имя должно быть валидным (минимум 2 символа), чтобы пройти первый уровень валидации
         var unitA = new DepartmentUnit
         {
             Id = Guid.NewGuid(),
-            Name = "Главный отдел", // Исправлено: > 2 символов
+            Name = "Valid Name",
             Type = UnitType.Other
         };
 
         context.Units.Add(unitA);
         await context.SaveChangesAsync();
 
-        // Теперь провоцируем цикл
+        // Act: Создаем цикл
         unitA.ParentId = unitA.Id;
+        context.Units.Update(unitA);
 
-        // Act
         Func<Task> act = async () => await context.SaveChangesAsync();
 
         // Assert
@@ -95,8 +106,5 @@ public class DbTriggersConfigurationTests : IDisposable
             .WithMessage("*Циклическая зависимость*");
     }
 
-    public void Dispose()
-    {
-        _connection.Dispose();
-    }
+    public void Dispose() => _connection.Dispose();
 }

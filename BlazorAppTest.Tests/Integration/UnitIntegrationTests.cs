@@ -3,9 +3,12 @@ using BlazorAppTest.Tests.Repositories;
 using BlazorAppTest.Unit;
 using FluentAssertions;
 using FluentValidation;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using System.Security.Claims;
 
 namespace BlazorAppTest.Tests.Integration;
 
@@ -20,33 +23,41 @@ public class UnitIntegrationTests : IDisposable
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
 
-        var services = new ServiceCollection()
-            .AddEntityFrameworkSqlite()
-            .AddSingleton<DatabaseTriggerService>()
-            .AddLogging();
+        var services = new ServiceCollection();
 
-        // 1. Регистрируем DbContext
-        services.AddDbContext<ApplicationDbContext>(opt =>
-            opt.UseSqlite(_connection));
+        // 1. Инфраструктура
+        services.AddSingleton<DatabaseTriggerService>();
+        services.AddLogging();
 
-        // 2. ВАЖНО: Регистрируем фабрику для тестов
-        // Используем IDbContextFactory, которую требует триггер
+        // 2. Имитация авторизации (обязательно для работы Интерцептора)
+        var authMock = new Mock<AuthenticationStateProvider>();
+        authMock.Setup(x => x.GetAuthenticationStateAsync())
+            .ReturnsAsync(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity())));
+        services.AddSingleton(authMock.Object);
+
+        // 3. Регистрация Интерцептора
+        services.AddSingleton<DatabaseTriggerInterceptor>();
+
+        // 4. Настройка опций (сразу с интерцептором)
+        services.AddDbContext<ApplicationDbContext>((sp, opt) =>
+        {
+            opt.UseSqlite(_connection);
+            opt.AddInterceptors(sp.GetRequiredService<DatabaseTriggerInterceptor>());
+        });
+
+        // 5. Фабрика (теперь берет опции из контейнера правильно)
         services.AddSingleton<IDbContextFactory<ApplicationDbContext>>(sp =>
-            new TestDbContextFactory(_options)); // Используем ваш ранее созданный TestDbContextFactory
+            new TestDbContextFactory(sp.GetRequiredService<DbContextOptions<ApplicationDbContext>>()));
 
         services.AddValidatorsFromAssemblyContaining<UnitBaseValidator<UnitBase>>();
 
         _internalServiceProvider = services.BuildServiceProvider();
+        _options = _internalServiceProvider.GetRequiredService<DbContextOptions<ApplicationDbContext>>();
 
-        // Настройка опций
-        _options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlite(_connection)
-            .UseInternalServiceProvider(_internalServiceProvider)
-            .Options;
-
-        // Инициализация триггеров
+        // 6. Инициализация триггеров
         _internalServiceProvider.RegisterDomainTriggers();
 
+        // Создание схемы
         using var context = new ApplicationDbContext(_options);
         context.Database.EnsureCreated();
     }
