@@ -1,4 +1,5 @@
-﻿using BlazorAppTest.Domain;
+﻿using System.Reflection;
+using BlazorAppTest.Domain;
 using BlazorAppTest.DomainObject.Interface;
 using BlazorAppTest.Interfaces;
 using FluentAssertions;
@@ -17,12 +18,12 @@ public class AuditSkipTests
     public async Task CaptureChanges_ShouldIgnoreSkipAudit_AndHandleSoftDelete()
     {
         // 1. Arrange - Настройка базы и сервисов
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
 
         using var context = new TestDbContext(options);
-        var userName = "TestUser";
+        string userName = "TestUser";
 
         // Настройка авторизации (чтобы GetUserNameAsync вернул TestUser)
         var authState = new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity(new[]
@@ -60,10 +61,10 @@ public class AuditSkipTests
 
         // Запускаем SavingChangesAsync (здесь проставится DeletedBy и DeletedAt)
         await interceptor.SavingChangesAsync(
-            new DbContextEventData(null, null, context),
+            new DbContextEventData(null!, null!, context),
             new InterceptionResult<int>());
 
-        var captured = CaptureChangesViaReflection(interceptor, context, userName);
+        List<ChangeEntryModel> captured = CaptureChangesViaReflection(interceptor, context, userName);
 
         // 3. Assert
         captured.Should().NotBeNull();
@@ -73,7 +74,7 @@ public class AuditSkipTests
         captured.Any(c => c.Entity is NonAuditableEntity).Should().BeFalse();
 
         // Проверка Soft Delete
-        var softDeletedEntry = captured.FirstOrDefault(c => c.Entity is AuditableEntity);
+        ChangeEntryModel? softDeletedEntry = captured.FirstOrDefault(c => c.Entity is AuditableEntity);
         softDeletedEntry.Should().NotBeNull();
         softDeletedEntry!.State.Should().Be(EntityStateChangeEnum.SoftDeleted);
 
@@ -84,10 +85,10 @@ public class AuditSkipTests
 
     private List<ChangeEntryModel> CaptureChangesViaReflection(DatabaseTriggerInterceptor interceptor, DbContext context, string user)
     {
-        var method = typeof(DatabaseTriggerInterceptor)
+        MethodInfo? method = typeof(DatabaseTriggerInterceptor)
             .GetMethod("CaptureChanges", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-        return (List<ChangeEntryModel>)method.Invoke(interceptor, new object[] { context, user })!;
+        return (List<ChangeEntryModel>)method?.Invoke(interceptor, [context, user])!;
     }
 }
 
