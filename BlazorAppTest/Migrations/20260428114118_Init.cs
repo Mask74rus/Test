@@ -6,11 +6,32 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace BlazorAppTest.Migrations
 {
     /// <inheritdoc />
-    public partial class Units : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.EnsureSchema(
+                name: "test");
+
+            migrationBuilder.CreateTable(
+                name: "ReferenceBase",
+                schema: "test",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    Code = table.Column<string>(type: "text", nullable: true),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "text", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ReferenceBase", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "Units",
                 schema: "test",
@@ -19,15 +40,18 @@ namespace BlazorAppTest.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Kind = table.Column<int>(type: "integer", nullable: false),
                     Type = table.Column<int>(type: "integer", nullable: false),
-                    ParentId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    Description = table.Column<string>(type: "text", nullable: true),
-                    Code = table.Column<string>(type: "text", nullable: true)
+                    ParentId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Units", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Units_ReferenceBase_Id",
+                        column: x => x.Id,
+                        principalSchema: "test",
+                        principalTable: "ReferenceBase",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Units_Units_ParentId",
                         column: x => x.ParentId,
@@ -48,6 +72,27 @@ namespace BlazorAppTest.Migrations
                     table.PrimaryKey("PK_DepartmentUnits", x => x.Id);
                     table.ForeignKey(
                         name: "FK_DepartmentUnits_Units_Id",
+                        column: x => x.Id,
+                        principalSchema: "test",
+                        principalTable: "Units",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PositionUnits",
+                schema: "test",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsMultiple = table.Column<bool>(type: "boolean", nullable: false),
+                    OrderNo = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PositionUnits", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_PositionUnits_Units_Id",
                         column: x => x.Id,
                         principalSchema: "test",
                         principalTable: "Units",
@@ -79,7 +124,8 @@ namespace BlazorAppTest.Migrations
                 schema: "test",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsAutomaticArchiving = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -127,6 +173,10 @@ namespace BlazorAppTest.Migrations
                 schema: "test");
 
             migrationBuilder.DropTable(
+                name: "PositionUnits",
+                schema: "test");
+
+            migrationBuilder.DropTable(
                 name: "ProductionUnits",
                 schema: "test");
 
@@ -140,6 +190,10 @@ namespace BlazorAppTest.Migrations
 
             migrationBuilder.DropTable(
                 name: "Units",
+                schema: "test");
+
+            migrationBuilder.DropTable(
+                name: "ReferenceBase",
                 schema: "test");
         }
     }

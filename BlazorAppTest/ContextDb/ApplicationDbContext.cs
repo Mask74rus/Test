@@ -11,9 +11,6 @@ public partial class ApplicationDbContext(
     DbContextOptions<ApplicationDbContext> options)
     : DbContext(options)
 {
-    // Свойство для ленивого получения сервиса из DI-контейнера
-    private DatabaseTriggerService TriggerService => this.GetService<DatabaseTriggerService>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Указываем схему по умолчанию для всех таблиц этого контекста

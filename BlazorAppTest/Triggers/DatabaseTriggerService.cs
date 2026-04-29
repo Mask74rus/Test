@@ -17,8 +17,12 @@ public class DatabaseTriggerService(IServiceScopeFactory scopeFactory)
         where TEntity : class
         where TTrigger : class
     {
-        // Проверяем, реализует ли класс интерфейс "ДО сохранения"
-        if (typeof(IBeforeSaveTrigger<TEntity>).IsAssignableFrom(typeof(TTrigger)))
+        // Определяем, какие интерфейсы реализует класс для данной сущности
+        bool isBefore = typeof(IBeforeSaveTrigger<TEntity>).IsAssignableFrom(typeof(TTrigger));
+        bool isAfter = typeof(IAfterSaveTrigger<TEntity>).IsAssignableFrom(typeof(TTrigger));
+
+        // 1. Регистрация "ДО" сохранения
+        if (isBefore)
         {
             BeforeSave<TEntity>(async args =>
             {
@@ -28,8 +32,8 @@ public class DatabaseTriggerService(IServiceScopeFactory scopeFactory)
             });
         }
 
-        // Проверяем, реализует ли класс интерфейс "ПОСЛЕ сохранения"
-        if (typeof(IAfterSaveTrigger<TEntity>).IsAssignableFrom(typeof(TTrigger)))
+        // 2. Регистрация "ПОСЛЕ" сохранения
+        if (isAfter)
         {
             AfterSave<TEntity>(async args =>
             {
@@ -37,6 +41,14 @@ public class DatabaseTriggerService(IServiceScopeFactory scopeFactory)
                 var handler = (IAfterSaveTrigger<TEntity>)ActivatorUtilities.CreateInstance<TTrigger>(scope.ServiceProvider);
                 await handler.HandleAsync(args);
             });
+        }
+
+        // 3. Защита: если класс не реализует ни один нужный интерфейс — бросаем ошибку при старте
+        if (!isBefore && !isAfter)
+        {
+            throw new InvalidOperationException(
+                $"Класс {typeof(TTrigger).Name} не реализует интерфейсы триггеров для сущности {typeof(TEntity).Name}. " +
+                $"Убедитесь, что он наследует IBeforeSaveTrigger<{typeof(TEntity).Name}> или IAfterSaveTrigger<{typeof(TEntity).Name}>");
         }
     }
 

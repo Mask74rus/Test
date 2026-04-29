@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BlazorAppTest.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260427073627_UpdateUnits")]
-    partial class UpdateUnits
+    [Migration("20260428114118_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -21,12 +21,12 @@ namespace BlazorAppTest.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("test")
-                .HasAnnotation("ProductVersion", "10.0.6")
+                .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("BlazorAppTest.Unit.UnitBase", b =>
+            modelBuilder.Entity("BlazorAppTest.Domain.ReferenceBase", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -37,15 +37,32 @@ namespace BlazorAppTest.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
                         .HasColumnType("text");
 
-                    b.Property<int>("Kind")
-                        .HasColumnType("integer");
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ReferenceBase", "test");
+
+                    b.UseTptMappingStrategy();
+                });
+
+            modelBuilder.Entity("BlazorAppTest.Unit.UnitBase", b =>
+                {
+                    b.HasBaseType("BlazorAppTest.Domain.ReferenceBase");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("uuid");
@@ -53,13 +70,9 @@ namespace BlazorAppTest.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("integer");
 
-                    b.HasKey("Id");
-
                     b.HasIndex("ParentId");
 
                     b.ToTable("Units", "test");
-
-                    b.UseTptMappingStrategy();
                 });
 
             modelBuilder.Entity("BlazorAppTest.Unit.DepartmentUnit", b =>
@@ -108,6 +121,12 @@ namespace BlazorAppTest.Migrations
 
             modelBuilder.Entity("BlazorAppTest.Unit.UnitBase", b =>
                 {
+                    b.HasOne("BlazorAppTest.Domain.ReferenceBase", null)
+                        .WithOne()
+                        .HasForeignKey("BlazorAppTest.Unit.UnitBase", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("BlazorAppTest.Unit.UnitBase", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId");
