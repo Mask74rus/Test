@@ -46,38 +46,21 @@ public static class ModelBuilderConventions
         }
     }
 
-    // Магия: превращаем вызов в типизированный modelBuilder.Entity<T>().HasQueryFilter()
-    /*private static void SetSoftDeleteFilter(this ModelBuilder modelBuilder, Type entityType)
-    {
-        MethodInfo? method = typeof(ModelBuilderConventions)
-            .GetMethod(nameof(GetSoftDeleteFilter), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
-            ?.MakeGenericMethod(entityType);
-
-        method?.Invoke(null, [modelBuilder]);
-    }
-
-    private static void GetSoftDeleteFilter<TEntity>(ModelBuilder modelBuilder) where TEntity : class, ISoftDeletable
-    {
-        modelBuilder.Entity<TEntity>().HasQueryFilter(x => x.DeletedAt == null);
-    }*/
-
     private static void SetSoftDeleteFilter(this ModelBuilder modelBuilder, Type entityType)
     {
         // Вместо сложной рефлексии используем встроенный механизм EF для динамических фильтров
         // если это возможно, либо проверяем, что entityType действительно класс
-        if (entityType.IsClass && !entityType.IsAbstract)
-        {
+        if (entityType.IsClass && !entityType.IsAbstract) 
             modelBuilder.Entity(entityType).HasQueryFilter(GenerateFilter(entityType));
-        }
     }
 
     // Вспомогательный метод для создания выражения e => e.DeletedAt == null
     private static LambdaExpression GenerateFilter(Type type)
     {
-        var parameter = Expression.Parameter(type, "e");
-        var property = Expression.Property(parameter, "DeletedAt");
-        var nullConstant = Expression.Constant(null, typeof(DateTime?));
-        var body = Expression.Equal(property, nullConstant);
+        ParameterExpression parameter = Expression.Parameter(type, "e");
+        MemberExpression property = Expression.Property(parameter, "DeletedAt");
+        ConstantExpression nullConstant = Expression.Constant(null, typeof(DateTime?));
+        BinaryExpression body = Expression.Equal(property, nullConstant);
         return Expression.Lambda(body, parameter);
     }
 }

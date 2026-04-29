@@ -10,15 +10,30 @@ public class AuditTrigger(IDbContextFactory<ApplicationDbContext> contextFactory
 {
     public async Task HandleAsync(EntityChangedEventArgs<Domain.DomainObject> args)
     {
-        using ApplicationDbContext context = await contextFactory.CreateDbContextAsync();
+        await using ApplicationDbContext context = await contextFactory.CreateDbContextAsync();
 
-        // Преобразуем PropertyChangeInfo в наш формат для хранения
-        List<AuditPropertyEntry> propertyEntries = args.Changes.Select(c => new AuditPropertyEntry
+        // 1. Формируем объект для сериализации динамически
+        object changesToSerialize;
+
+        if (args.State == EntityStateChangeEnum.Added)
         {
-            PropertyName = c.PropertyName,
-            OldValue = c.OriginalValue,
-            NewValue = c.CurrentValue
-        }).ToList();
+            // Для новых записей создаем список анонимных объектов БЕЗ OldValue
+            changesToSerialize = args.Changes.Select(c => new
+            {
+                c.PropertyName,
+                NewValue = c.CurrentValue
+            }).ToList();
+        }
+        else
+        {
+            // Для изменений оставляем структуру с OldValue
+            changesToSerialize = args.Changes.Select(c => new
+            {
+                c.PropertyName,
+                OldValue = c.OriginalValue,
+                NewValue = c.CurrentValue
+            }).ToList();
+        }
 
         var auditLog = new AuditLog
         {
@@ -28,8 +43,8 @@ public class AuditTrigger(IDbContextFactory<ApplicationDbContext> contextFactory
             Action = args.State.ToString(),
             ChangedAt = args.ChangedAt,
             ChangedBy = args.ChangedBy,
-            // Сериализуем только то, что реально изменилось
-            ChangesJson = JsonSerializer.Serialize(propertyEntries)
+            // 2. Сериализуем динамически созданный объект
+            ChangesJson = JsonSerializer.Serialize(changesToSerialize)
         };
 
         context.Set<AuditLog>().Add(auditLog);

@@ -1,9 +1,10 @@
-﻿using BlazorAppTest.Interfaces;
+﻿using BlazorAppTest.Audit;
+using BlazorAppTest.Interfaces;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Collections.Concurrent;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace BlazorAppTest.Domain;
 
@@ -71,37 +72,76 @@ public class DatabaseTriggerInterceptor(
 
     private List<ChangeEntryModel> CaptureChanges(DbContext context, string? userName)
     {
-        return context.ChangeTracker.Entries()
+        List<EntityEntry> entries = context.ChangeTracker.Entries()
             .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-            .Select(e => {
-                EntityStateChangeEnum state = MapState(e.State);
+            .Where(e => e.Entity is not AuditLog)
+            .ToList();
 
-                // Если объект помечен интерфейсом ISoftDeletable
-                if (e.Entity is ISoftDeletable soft)
-                {
-                    PropertyEntry deletedAtProp = e.Property(nameof(ISoftDeletable.DeletedAt));
-                    if (deletedAtProp.IsModified && soft.DeletedAt != null)
-                    {
-                        state = EntityStateChangeEnum.SoftDeleted;
-                    }
-                }
+        var result = new List<ChangeEntryModel>();
 
-                return new ChangeEntryModel
-                {
-                    Entity = e.Entity,
-                    State = state,
-                    ChangedBy = userName,
-                    ChangedAt = DateTime.UtcNow,
-                    Changes = e.State == EntityState.Modified
-                    ? e.Properties.Where(p => p.IsModified).Select(p => new PropertyChangeInfo
+        foreach (EntityEntry e in entries)
+        {
+            EntityStateChangeEnum state = MapState(e.State);
+
+            // Обработка Soft Delete
+            if (e.Entity is ISoftDeletable soft)
+            {
+                PropertyEntry prop = e.Property(nameof(ISoftDeletable.DeletedAt));
+                if (prop.IsModified && soft.DeletedAt != null) state = EntityStateChangeEnum.SoftDeleted;
+            }
+
+            List<PropertyChangeInfo> changes = new();
+
+            if (state == EntityStateChangeEnum.Added)
+            {
+                changes = e.Properties
+                    .Where(p => p.CurrentValue != null)
+                    .Select(p => new PropertyChangeInfo
                     {
                         PropertyName = p.Metadata.Name,
-                        OriginalValue = p.OriginalValue,
+                        OriginalValue = null,
                         CurrentValue = p.CurrentValue
-                    }).ToList()
-                    : []
-                };
-            }).ToList();
+                    }).ToList();
+            }
+            else if (state is EntityStateChangeEnum.Modified or EntityStateChangeEnum.SoftDeleted)
+            {
+                // ГАРАНТИРОВАННЫЙ СПОСОБ: берем значения, которые сейчас реально в БД
+                PropertyValues? dbValues = e.GetDatabaseValues();
+
+                foreach (PropertyEntry p in e.Properties.Where(p => p.IsModified))
+                {
+                    string propertyName = p.Metadata.Name;
+                    // Если dbValues нет (запись уже удалена), берем OriginalValues
+                    object? originalValue = dbValues?[propertyName] ?? e.OriginalValues[propertyName];
+                    object? currentValue = p.CurrentValue;
+
+                    if (!Object.Equals(originalValue, currentValue))
+                    {
+                        changes.Add(new PropertyChangeInfo
+                        {
+                            PropertyName = propertyName,
+                            OriginalValue = originalValue,
+                            CurrentValue = currentValue
+                        });
+                    }
+                }
+            }
+
+            // Пропускаем "пустые" обновления
+            if (state == EntityStateChangeEnum.Modified && changes.Count == 0)
+                continue;
+
+            result.Add(new ChangeEntryModel
+            {
+                Entity = e.Entity,
+                State = state,
+                ChangedBy = userName,
+                ChangedAt = DateTime.UtcNow,
+                Changes = changes
+            });
+        }
+
+        return result;
     }
 
     private async Task<string?> GetUserNameAsync()
@@ -116,7 +156,11 @@ public class DatabaseTriggerInterceptor(
                 return state.User.Identity?.Name;
             }
         }
-        catch { }
+        catch
+        {
+            // ignored
+        }
+
         return "System";
     }
 
