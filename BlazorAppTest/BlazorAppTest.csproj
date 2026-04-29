@@ -26,4 +26,10 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
   </ItemGroup>
 
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+			<_Parameter1>BlazorAppTest.Tests</_Parameter1><!-- Имя тестового проекта -->
+		</AssemblyAttribute>
+	</ItemGroup>
+
 </Project>

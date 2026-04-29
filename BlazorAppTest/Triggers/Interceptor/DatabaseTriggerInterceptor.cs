@@ -1,4 +1,5 @@
 ﻿using BlazorAppTest.Audit;
+using BlazorAppTest.DomainObject.Interface;
 using BlazorAppTest.Interfaces;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -74,7 +75,7 @@ public class DatabaseTriggerInterceptor(
     {
         List<EntityEntry> entries = context.ChangeTracker.Entries()
             .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-            .Where(e => e.Entity is not AuditLog)
+            .Where(e => e.Entity is not AuditLog && e.Entity is not ISkipAudit)
             .ToList();
 
         var result = new List<ChangeEntryModel>();
@@ -171,13 +172,4 @@ public class DatabaseTriggerInterceptor(
         _ => EntityStateChangeEnum.Modified
     };
 
-    // Внутренняя модель для кэширования
-    private class ChangeEntryModel
-    {
-        public object Entity { get; init; } = null!;
-        public EntityStateChangeEnum State { get; init; }
-        public List<PropertyChangeInfo> Changes { get; init; } = [];
-        public string? ChangedBy { get; init; }
-        public DateTime ChangedAt { get; init; }
-    }
 }
