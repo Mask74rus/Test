@@ -1,9 +1,11 @@
-﻿using BlazorAppTest.Components;
+﻿using BlazorAppTest.Audit;
+using BlazorAppTest.Components;
+using BlazorAppTest.Domain;
 using MudBlazor.Services;
 
 namespace BlazorAppTest.Configurator;
 
-public class WebAppConfigurator : BaseConfigurator
+public class WebAppConfigurator : AppConfigurator
 {
     public override void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {

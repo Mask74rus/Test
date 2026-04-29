@@ -13,24 +13,15 @@ public partial class ApplicationDbContext(
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Указываем схему по умолчанию для всех таблиц этого контекста
+        // Указываем общую схему
         modelBuilder.HasDefaultSchema("test");
 
-        foreach (IMutableEntityType entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            if (typeof(IDomainObjectHasKey<Guid>).IsAssignableFrom(entityType.ClrType))
-            {
-                PropertyBuilder property = modelBuilder.Entity(entityType.ClrType)
-                    .Property("Id")
-                    .ValueGeneratedNever(); // Прямое указание базе не генерировать ключ  
-            }
-        }
+        // АВТОМАТИКА: Находим все классы IEntityTypeConfiguration в этой сборке
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
 
-        modelBuilder.RegisterUnitEntities();
+        // ГЛОБАЛЬНЫЕ ПРАВИЛА: Применяем индексы и настройки ключей через метод расширения
+        modelBuilder.ApplyGlobalConventions();
 
         base.OnModelCreating(modelBuilder);
-
-        // Автоматически скрывать удаленные элементы для всех, кто реализует ISoftDeletable
-        modelBuilder.Entity<ReferenceBase>().HasQueryFilter(u => u.DeletedAt == null);
     }
 }

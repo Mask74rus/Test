@@ -1,0 +1,38 @@
+﻿using BlazorAppTest.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using BlazorAppTest.Domain;
+
+namespace BlazorAppTest.Audit;
+
+public class AuditTrigger(IDbContextFactory<ApplicationDbContext> contextFactory)
+    : IAfterSaveTrigger<Domain.DomainObject>
+{
+    public async Task HandleAsync(EntityChangedEventArgs<Domain.DomainObject> args)
+    {
+        using ApplicationDbContext context = await contextFactory.CreateDbContextAsync();
+
+        // Преобразуем PropertyChangeInfo в наш формат для хранения
+        List<AuditPropertyEntry> propertyEntries = args.Changes.Select(c => new AuditPropertyEntry
+        {
+            PropertyName = c.PropertyName,
+            OldValue = c.OriginalValue,
+            NewValue = c.CurrentValue
+        }).ToList();
+
+        var auditLog = new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            EntityName = args.Entity.GetType().Name,
+            EntityId = args.Entity.Id,
+            Action = args.State.ToString(),
+            ChangedAt = args.ChangedAt,
+            ChangedBy = args.ChangedBy,
+            // Сериализуем только то, что реально изменилось
+            ChangesJson = JsonSerializer.Serialize(propertyEntries)
+        };
+
+        context.Set<AuditLog>().Add(auditLog);
+        await context.SaveChangesAsync();
+    }
+}
