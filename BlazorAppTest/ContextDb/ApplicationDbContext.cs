@@ -1,9 +1,4 @@
-﻿using BlazorAppTest.Domain;
-using BlazorAppTest.DomainObject.Interface;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace BlazorAppTest;
 

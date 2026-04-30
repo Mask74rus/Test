@@ -1,5 +1,4 @@
 ﻿using BlazorAppTest.Domain;
-using BlazorAppTest.Tests.Repositories;
 using BlazorAppTest.Unit;
 using FluentAssertions;
 using FluentValidation;
@@ -9,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using System.Security.Claims;
+using BlazorAppTest.Tests.Repositories;
 
 namespace BlazorAppTest.Tests.Integration;
 

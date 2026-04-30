@@ -1,4 +1,5 @@
-﻿using BlazorAppTest.Repositories;
+﻿
+using BlazorAppTest.Service;
 
 namespace BlazorAppTest.Configurator;
 
@@ -9,7 +10,8 @@ public class ModuleConfigurator : WebAppConfigurator
         base.ConfigureServices(services, configuration);
 
         // Специфичные репозитории проекта
-        services.AddScoped<IUnitRepository, UnitRepository>();
+        // Сервисы
+        services.AddScoped<IUnitService, UnitService>();
     }
 
     public override void ConfigureApp(WebApplication app)

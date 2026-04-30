@@ -1,6 +1,7 @@
-﻿@using BlazorAppTest.Repositories
+﻿
+@using BlazorAppTest.Service
 @using BlazorAppTest.Unit
-@inject IUnitRepository UnitRepository
+@inject IUnitService UnitService
 @inject ISnackbar Snackbar
 
 
@@ -54,7 +55,7 @@
         _newParentId = CurrentUnit.ParentId;
         
         // Загружаем все юниты, кроме самого себя (нельзя быть родителем самому себе)
-        var all = await UnitRepository.GetAllAsync();
+        var all = await UnitService.GetAllAsync();
         _potentialParents = all.Where(u => u.Id != CurrentUnit.Id).OrderBy(u => u.Name).ToList();
     }
 
@@ -63,7 +64,7 @@
         try
         {
             // Вызываем MoveAsync, который инициирует SaveChangesAsync
-            await UnitRepository.MoveAsync(CurrentUnit.Id, _newParentId);
+            await UnitService.MoveAsync(CurrentUnit.Id, _newParentId);
             
             Snackbar.Add("Объект успешно перемещен", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));

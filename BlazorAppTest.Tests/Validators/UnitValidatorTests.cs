@@ -1,6 +1,5 @@
 ﻿using BlazorAppTest.Unit;
 using FluentValidation.TestHelper;
-using Xunit;
 
 namespace BlazorAppTest.Tests.Validators;
 

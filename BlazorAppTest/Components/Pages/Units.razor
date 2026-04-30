@@ -1,8 +1,10 @@
 ﻿@page "/units"
 
-@using BlazorAppTest.Repositories
+
+@using BlazorAppTest.Service
 @using BlazorAppTest.Unit
-@inject IUnitRepository UnitRepository
+@inject IUnitService UnitService
+
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -127,7 +129,7 @@
 
     private async Task LoadData()
     {
-        _allUnits = await UnitRepository.GetAllWithChildrenAsync();
+        _allUnits = await UnitService.GetAllWithChildrenAsync();
         BuildTree();
     }
 
@@ -183,8 +185,8 @@
     {
         try
         {
-            if (_isNewRecord) await UnitRepository.AddAsync(_selectedUnit!);
-            else await UnitRepository.UpdateAsync(_selectedUnit!);
+            if (_isNewRecord) await UnitService.AddAsync(_selectedUnit!);
+            else await UnitService.UpdateAsync(_selectedUnit!);
             
             Snackbar.Add("Данные сохранены", Severity.Success);
             _isNewRecord = false;
@@ -208,7 +210,7 @@
 
         try 
         {
-            await UnitRepository.DeleteAsync(_selectedUnit.Id);
+            await UnitService.DeleteAsync(_selectedUnit.Id);
         
             // Если удаление прошло успешно:
             _selectedUnit = null;

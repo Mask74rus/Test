@@ -3,7 +3,6 @@ using BlazorAppTest.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
-using System.Reflection;
 
 namespace BlazorAppTest;
 
@@ -33,7 +32,7 @@ public static class ModelBuilderConventions
             if (typeof(ISoftDeletable).IsAssignableFrom(type))
             {
                 // Индекс можно (и нужно) ставить на каждую таблицу наследника для скорости
-                modelBuilder.Entity(type).HasIndex("DeletedAt").HasFilter("\"DeletedAt\" IS NULL");
+                //modelBuilder.Entity(type).HasIndex("DeletedAt").HasFilter("\"DeletedAt\" IS NULL");
 
                 // А вот ФИЛЬТР ставим ТОЛЬКО на корень
                 // Проверяем: если у типа нет базового типа ИЛИ базовый тип не реализует ISoftDeletable

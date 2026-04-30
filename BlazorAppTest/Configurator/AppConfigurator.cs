@@ -1,6 +1,5 @@
 ﻿using BlazorAppTest.Audit;
 using BlazorAppTest.Domain;
-using BlazorAppTest.Repositories;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,9 +24,7 @@ public class AppConfigurator : IAppConfigurator
                 .AddInterceptors(sp.GetRequiredService<DatabaseTriggerInterceptor>());
         });
 
-        // Репозитории
-        services.AddScoped(typeof(IBaseRepository<,>), typeof(BaseRepository<,>));
-        services.AddScoped(typeof(IReferenceRepository<>), typeof(ReferenceRepository<>));
+
     }
 
     public virtual void ConfigureApp(WebApplication app)
